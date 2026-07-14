@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DeepSeek Pricing</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0f1117;
+    color: #e1e4ea;
+  }
+  .card {
+    background: #1a1d27;
+    border-radius: 24px;
+    padding: 3rem 4rem;
+    text-align: center;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    max-width: 560px;
+    width: 90%;
+    transition: border-color 0.6s ease;
+    border: 2px solid #2a2d3a;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.4rem 1.2rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+  }
+  .multiplier {
+    font-size: 4.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 0.25rem;
+    transition: color 0.6s ease;
+  }
+  .multiplier .unit {
+    font-size: 1.5rem;
+    font-weight: 400;
+    opacity: 0.6;
+    margin-left: 0.2rem;
+  }
+  .label {
+    font-size: 1rem;
+    opacity: 0.65;
+    margin-bottom: 2rem;
+  }
+  .countdown-box {
+    background: #252836;
+    border-radius: 16px;
+    padding: 1.2rem;
+    margin-top: 0.5rem;
+  }
+  .countdown-label {
+    font-size: 0.8rem;
+    opacity: 0.5;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+  }
+  .countdown-time {
+    font-size: 2rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .time-info {
+    margin-top: 1.5rem;
+    font-size: 0.75rem;
+    opacity: 0.4;
+    line-height: 1.6;
+  }
+  .time-info strong { opacity: 0.7; }
+  .peak { border-color: #f04a4a; }
+  .peak .badge { background: #f04a4a22; color: #f04a4a; }
+  .peak .multiplier { color: #f04a4a; }
+  .offpeak { border-color: #34d399; }
+  .offpeak .badge { background: #34d39922; color: #34d399; }
+  .offpeak .multiplier { color: #34d399; }
+  footer { margin-top: 1.5rem; font-size: 0.7rem; opacity: 0.3; }
+</style>
+</head>
+<body>
+
+<div class="card offpeak" id="card">
+  <div class="badge" id="badge">Checking…</div>
+  <div class="multiplier" id="multiplier">—<span class="unit">×</span></div>
+  <div class="label" id="label">current price multiplier</div>
+  <div class="countdown-box">
+    <div class="countdown-label" id="countdownLabel">—</div>
+    <div class="countdown-time" id="countdownTime">--:--:--</div>
+  </div>
+  <div class="time-info" id="timeInfo"></div>
+  <footer>DeepSeek peak-valley pricing</footer>
+</div>
+
+<script>
+// Peak windows in UTC hours: [01:00, 04:00) and [06:00, 10:00)
+const PEAK_SLOTS = [[1, 4], [6, 10]];
+
+function isPeak(date) {
+  const h = date.getUTCHours();
+  return PEAK_SLOTS.some(([s, e]) => h >= s && h < e);
+}
+
+function utcHourToday(utcHour) {
+  const now = new Date();
+  const utcMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return new Date(utcMidnight + utcHour * 3600000);
+}
+
+function fmtLocal(d) {
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function getLocalTzName() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch { return ''; }
+}
+
+function buildScheduleString() {
+  const tz = getLocalTzName();
+  const parts = PEAK_SLOTS.map(([s, e]) => {
+    const start = utcHourToday(s);
+    const end = utcHourToday(e);
+    return `${fmtLocal(start)}\u2013${fmtLocal(end)}`;
+  });
+  let s = 'Peak hours (your time' + (tz ? ', ' + tz : '') + '): <strong>' + parts[0] + '</strong> &amp; <strong>' + parts[1] + '</strong>';
+  s += '<br>Peak hours (UTC): 01:00\u201304:00 &amp; 06:00\u201310:00';
+  return s;
+}
+
+function nextTransition(date) {
+  const now = date.getTime();
+  const today = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+
+  const transitions = [
+    today + 1*3600000,
+    today + 4*3600000,
+    today + 6*3600000,
+    today + 10*3600000,
+  ];
+  const tomorrow = today + 86400000;
+
+  if (now < transitions[0]) return { at: transitions[0], toPeak: true };
+  for (let i = 0; i < transitions.length; i++) {
+    if (now < transitions[i]) {
+      return { at: transitions[i], toPeak: i % 2 === 0 };
+    }
+  }
+  return { at: tomorrow + 1*3600000, toPeak: true };
+}
+
+function fmtHMS(ms) {
+  if (ms <= 0) return "00:00:00";
+  const total = Math.floor(ms / 1000);
+  const hh = String(Math.floor(total / 3600)).padStart(2, '0');
+  const mm = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+  const ss = String(total % 60).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
+
+function tick() {
+  const now = new Date();
+  const peak = isPeak(now);
+
+  const card = document.getElementById('card');
+  const badge = document.getElementById('badge');
+  const multiplier = document.getElementById('multiplier');
+  const label = document.getElementById('label');
+  const countdownLabel = document.getElementById('countdownLabel');
+  const countdownTime = document.getElementById('countdownTime');
+  const timeInfo = document.getElementById('timeInfo');
+
+  card.classList.remove('peak', 'offpeak');
+  card.classList.add(peak ? 'peak' : 'offpeak');
+
+  if (peak) {
+    badge.textContent = 'Peak pricing';
+    multiplier.innerHTML = '2.0<span class="unit">×</span>';
+    label.textContent = 'prices are doubled';
+    countdownLabel.textContent = 'Time until cheap again \u2193';
+  } else {
+    badge.textContent = 'Off-peak';
+    multiplier.innerHTML = '1.0<span class="unit">×</span>';
+    label.textContent = 'normal prices';
+    countdownLabel.textContent = 'Time until next peak \u2193';
+  }
+
+  const trans = nextTransition(now);
+  const diff = trans.at - now.getTime();
+  countdownTime.textContent = fmtHMS(Math.max(0, diff));
+
+  timeInfo.innerHTML = buildScheduleString();
+}
+
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
