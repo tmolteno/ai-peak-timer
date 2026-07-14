@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>DeepSeek Pricing</title>
+<title>AI API Pricing Monitors</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -15,14 +15,22 @@
     background: #0f1117;
     color: #e1e4ea;
   }
+  .panels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 2rem;
+  }
   .card {
     background: #1a1d27;
     border-radius: 24px;
-    padding: 3rem 4rem;
+    padding: 2.5rem 3rem;
     text-align: center;
     box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-    max-width: 560px;
-    width: 90%;
+    width: 420px;
+    max-width: 90vw;
     transition: border-color 0.6s ease;
     border: 2px solid #2a2d3a;
   }
@@ -37,78 +45,110 @@
     margin-bottom: 1.5rem;
   }
   .multiplier {
-    font-size: 4.5rem;
+    font-size: 4rem;
     font-weight: 700;
     line-height: 1.1;
     margin-bottom: 0.25rem;
     transition: color 0.6s ease;
   }
   .multiplier .unit {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     font-weight: 400;
     opacity: 0.6;
     margin-left: 0.2rem;
   }
   .label {
-    font-size: 1rem;
+    font-size: 0.95rem;
     opacity: 0.65;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
   }
   .countdown-box {
     background: #252836;
     border-radius: 16px;
-    padding: 1.2rem;
+    padding: 1rem;
     margin-top: 0.5rem;
   }
   .countdown-label {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     opacity: 0.5;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
   }
   .countdown-time {
-    font-size: 2rem;
+    font-size: 1.75rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
   .time-info {
-    margin-top: 1.5rem;
-    font-size: 0.75rem;
+    margin-top: 1.2rem;
+    font-size: 0.72rem;
     opacity: 0.4;
     line-height: 1.6;
   }
   .time-info strong { opacity: 0.7; }
+  .promo {
+    margin-top: 0.75rem;
+    font-size: 0.7rem;
+    opacity: 0.45;
+    font-style: italic;
+  }
   .peak { border-color: #f04a4a; }
   .peak .badge { background: #f04a4a22; color: #f04a4a; }
   .peak .multiplier { color: #f04a4a; }
   .offpeak { border-color: #34d399; }
   .offpeak .badge { background: #34d39922; color: #34d399; }
   .offpeak .multiplier { color: #34d399; }
-  footer { margin-top: 1.5rem; font-size: 0.7rem; opacity: 0.3; }
+  footer { font-size: 0.7rem; opacity: 0.3; margin-top: 1.2rem; }
 </style>
 </head>
 <body>
 
-<div class="card offpeak" id="card">
-  <div class="badge" id="badge">Checking…</div>
-  <div class="multiplier" id="multiplier">—<span class="unit">×</span></div>
-  <div class="label" id="label">current price multiplier</div>
-  <div class="countdown-box">
-    <div class="countdown-label" id="countdownLabel">—</div>
-    <div class="countdown-time" id="countdownTime">--:--:--</div>
+<div class="panels">
+
+  <!-- DeepSeek Card -->
+  <div class="card offpeak" id="dsCard">
+    <div class="badge" id="dsBadge">Checking…</div>
+    <div class="multiplier" id="dsMultiplier">—<span class="unit">×</span></div>
+    <div class="label" id="dsLabel">current price multiplier</div>
+    <div class="countdown-box">
+      <div class="countdown-label" id="dsCountdownLabel">—</div>
+      <div class="countdown-time" id="dsCountdownTime">--:--:--</div>
+    </div>
+    <div class="time-info" id="dsTimeInfo"></div>
+    <footer>DeepSeek peak-valley pricing</footer>
   </div>
-  <div class="time-info" id="timeInfo"></div>
-  <footer>DeepSeek peak-valley pricing</footer>
+
+  <!-- Z.AI Card -->
+  <div class="card offpeak" id="zaCard">
+    <div class="badge" id="zaBadge">Checking…</div>
+    <div class="multiplier" id="zaMultiplier">—<span class="unit">×</span></div>
+    <div class="label" id="zaLabel">current quota multiplier</div>
+    <div class="countdown-box">
+      <div class="countdown-label" id="zaCountdownLabel">—</div>
+      <div class="countdown-time" id="zaCountdownTime">--:--:--</div>
+    </div>
+    <div class="time-info" id="zaTimeInfo"></div>
+    <div class="promo" id="zaPromo"></div>
+    <footer>Z.AI peak-valley quota</footer>
+  </div>
+
 </div>
 
 <script>
+// ── DeepSeek ─────────────────────────────────────────────────
 // Peak windows in UTC hours: [01:00, 04:00) and [06:00, 10:00)
-const PEAK_SLOTS = [[1, 4], [6, 10]];
+const DS_PEAK_SLOTS = [[1, 4], [6, 10]];
 
-function isPeak(date) {
+// ── Z.AI ─────────────────────────────────────────────────────
+// Peak: 14:00–18:00 UTC+8 = 06:00–10:00 UTC
+const ZA_PEAK_SLOTS = [[6, 10]];
+
+// ── Shared helpers ───────────────────────────────────────────
+
+function isPeak(date, slots) {
   const h = date.getUTCHours();
-  return PEAK_SLOTS.some(([s, e]) => h >= s && h < e);
+  return slots.some(([s, e]) => h >= s && h < e);
 }
 
 function utcHourToday(utcHour) {
@@ -127,39 +167,6 @@ function getLocalTzName() {
   } catch { return ''; }
 }
 
-function buildScheduleString() {
-  const tz = getLocalTzName();
-  const parts = PEAK_SLOTS.map(([s, e]) => {
-    const start = utcHourToday(s);
-    const end = utcHourToday(e);
-    return `${fmtLocal(start)}\u2013${fmtLocal(end)}`;
-  });
-  let s = 'Peak hours (your time' + (tz ? ', ' + tz : '') + '): <strong>' + parts[0] + '</strong> &amp; <strong>' + parts[1] + '</strong>';
-  s += '<br>Peak hours (UTC): 01:00\u201304:00 &amp; 06:00\u201310:00';
-  return s;
-}
-
-function nextTransition(date) {
-  const now = date.getTime();
-  const today = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-
-  const transitions = [
-    today + 1*3600000,
-    today + 4*3600000,
-    today + 6*3600000,
-    today + 10*3600000,
-  ];
-  const tomorrow = today + 86400000;
-
-  if (now < transitions[0]) return { at: transitions[0], toPeak: true };
-  for (let i = 0; i < transitions.length; i++) {
-    if (now < transitions[i]) {
-      return { at: transitions[i], toPeak: i % 2 === 0 };
-    }
-  }
-  return { at: tomorrow + 1*3600000, toPeak: true };
-}
-
 function fmtHMS(ms) {
   if (ms <= 0) return "00:00:00";
   const total = Math.floor(ms / 1000);
@@ -169,17 +176,68 @@ function fmtHMS(ms) {
   return `${hh}:${mm}:${ss}`;
 }
 
-function tick() {
-  const now = new Date();
-  const peak = isPeak(now);
+// Build schedule string from arbitrary UTC slots
+function buildScheduleString(slots, label) {
+  const tz = getLocalTzName();
+  const parts = slots.map(([s, e]) => {
+    const start = utcHourToday(s);
+    const end = utcHourToday(e);
+    return `${fmtLocal(start)}\u2013${fmtLocal(end)}`;
+  });
+  const joined = parts.map(p => '<strong>' + p + '</strong>').join(' &amp; ');
+  let s = label + ' (your time' + (tz ? ', ' + tz : '') + '): ' + joined;
+  return s;
+}
 
-  const card = document.getElementById('card');
-  const badge = document.getElementById('badge');
-  const multiplier = document.getElementById('multiplier');
-  const label = document.getElementById('label');
-  const countdownLabel = document.getElementById('countdownLabel');
-  const countdownTime = document.getElementById('countdownTime');
-  const timeInfo = document.getElementById('timeInfo');
+function buildUtcString(slots) {
+  const parts = slots.map(([s, e]) => {
+    const sh = String(s).padStart(2, '0');
+    const eh = String(e).padStart(2, '0');
+    return sh + ':00\u2013' + eh + ':00';
+  });
+  return 'UTC: ' + parts.join(' &amp; ');
+}
+
+// nextTransition for arbitrary sorted UTC hour slots
+function nextTransition(date, slots) {
+  const now = date.getTime();
+  const today = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const tomorrow = today + 86400000;
+
+  // Build sorted transition points: each slot boundary is a transition
+  const points = [];
+  slots.forEach(([s, e]) => {
+    points.push({ at: today + s * 3600000, toPeak: true });
+    points.push({ at: today + e * 3600000, toPeak: false });
+  });
+  points.sort((a, b) => a.at - b.at);
+
+  for (const p of points) {
+    if (now < p.at) return p;
+  }
+  // Wrap to tomorrow's first transition
+  return { at: tomorrow + slots[0][0] * 3600000, toPeak: true };
+}
+
+// ── Z.AI promo: 1x off-peak through end of September 2026 ────
+function isZaPromoActive() {
+  const now = new Date();
+  // Through end of September → promo ends Oct 1, 2026 00:00:00 UTC
+  const promoEnd = Date.UTC(2026, 9, 1); // month 9 = October (0-indexed)
+  return now.getTime() < promoEnd;
+}
+
+// ── Per-provider tick ────────────────────────────────────────
+
+function tickDeepSeek(now) {
+  const peak = isPeak(now, DS_PEAK_SLOTS);
+  const card = document.getElementById('dsCard');
+  const badge = document.getElementById('dsBadge');
+  const multiplier = document.getElementById('dsMultiplier');
+  const label = document.getElementById('dsLabel');
+  const countdownLabel = document.getElementById('dsCountdownLabel');
+  const countdownTime = document.getElementById('dsCountdownTime');
+  const timeInfo = document.getElementById('dsTimeInfo');
 
   card.classList.remove('peak', 'offpeak');
   card.classList.add(peak ? 'peak' : 'offpeak');
@@ -188,19 +246,71 @@ function tick() {
     badge.textContent = 'Peak pricing';
     multiplier.innerHTML = '2.0<span class="unit">×</span>';
     label.textContent = 'prices are doubled';
-    countdownLabel.textContent = 'Time until cheap again \u2193';
+    countdownLabel.textContent = 'Time until cheap again ↓';
   } else {
     badge.textContent = 'Off-peak';
     multiplier.innerHTML = '1.0<span class="unit">×</span>';
     label.textContent = 'normal prices';
-    countdownLabel.textContent = 'Time until next peak \u2193';
+    countdownLabel.textContent = 'Time until next peak ↓';
   }
 
-  const trans = nextTransition(now);
+  const trans = nextTransition(now, DS_PEAK_SLOTS);
   const diff = trans.at - now.getTime();
   countdownTime.textContent = fmtHMS(Math.max(0, diff));
 
-  timeInfo.innerHTML = buildScheduleString();
+  timeInfo.innerHTML = buildScheduleString(DS_PEAK_SLOTS, 'Peak hours') +
+    '<br>' + buildUtcString(DS_PEAK_SLOTS);
+}
+
+function tickZa(now) {
+  const peak = isPeak(now, ZA_PEAK_SLOTS);
+  const promo = isZaPromoActive();
+
+  const card = document.getElementById('zaCard');
+  const badge = document.getElementById('zaBadge');
+  const multiplier = document.getElementById('zaMultiplier');
+  const label = document.getElementById('zaLabel');
+  const countdownLabel = document.getElementById('zaCountdownLabel');
+  const countdownTime = document.getElementById('zaCountdownTime');
+  const timeInfo = document.getElementById('zaTimeInfo');
+  const promoEl = document.getElementById('zaPromo');
+
+  card.classList.remove('peak', 'offpeak');
+  card.classList.add(peak ? 'peak' : 'offpeak');
+
+  if (peak) {
+    badge.textContent = 'Peak pricing';
+    multiplier.innerHTML = '3.0<span class="unit">×</span>';
+    label.textContent = 'quota consumed at 3×';
+    countdownLabel.textContent = 'Time until off-peak ↓';
+  } else {
+    badge.textContent = 'Off-peak';
+    if (promo) {
+      multiplier.innerHTML = '1.0<span class="unit">×</span>';
+      label.textContent = 'promo rate (normally 2×)';
+      promoEl.textContent = 'Limited-time: 1× off-peak through September 2026';
+    } else {
+      multiplier.innerHTML = '2.0<span class="unit">×</span>';
+      label.textContent = 'standard off-peak rate';
+      promoEl.textContent = '';
+    }
+    countdownLabel.textContent = 'Time until next peak ↓';
+  }
+
+  const trans = nextTransition(now, ZA_PEAK_SLOTS);
+  const diff = trans.at - now.getTime();
+  countdownTime.textContent = fmtHMS(Math.max(0, diff));
+
+  timeInfo.innerHTML = buildScheduleString(ZA_PEAK_SLOTS, 'Peak hours') +
+    '<br>' + buildUtcString(ZA_PEAK_SLOTS) + ' (UTC+8: 14:00–18:00)';
+}
+
+// ── Main loop ────────────────────────────────────────────────
+
+function tick() {
+  const now = new Date();
+  tickDeepSeek(now);
+  tickZa(now);
 }
 
 tick();
